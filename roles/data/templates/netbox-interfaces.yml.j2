@@ -37,7 +37,11 @@ openconfig-interfaces:interfaces:
    {% if interface.mtu is defined and interface.mtu %} 
          mtu: {{ interface.mtu }}
    {% endif %}{# if interface.mtu is defined and interface.mtu #}
-   {% set interface_type = {"virtual": "softwareLoopback", "lag": "ieee8023adLag"}[interface.type.value] | default('ethernetCsmacd') %}               
+   {% if interface.type.value == 'virtual' and interface.untagged_vlan is defined and interface.untagged_vlan %}
+   {% set interface_type = 'l3ipvlan' %}
+   {% else %}
+   {% set interface_type = {"virtual": "softwareLoopback", "lag": "ieee8023adLag"}[interface.type.value] | default('ethernetCsmacd') %}
+   {% endif %}
          type: {{ interface_type }}
          enabled: {{ 'true' if interface.enabled | bool else 'false' }}
    {% if interface_type == 'ethernetCsmacd' %}
@@ -60,6 +64,37 @@ openconfig-interfaces:interfaces:
          {% endif %}{# if interface.mode.value #}
       {% endif %}{# if interface.mode #}
    {% endif %}{# if interface_type #}
+   {% if interface_type == 'l3ipvlan' %}
+      openconfig-vlan:routed-vlan:
+         config:
+            vlan: "{{ interface.untagged_vlan.vid }}"
+      {% if interface.ip_addresses is defined and interface.ip_addresses %}
+         openconfig-if-ip:ipv4:
+         {% if interface.ip_addresses[0].status.value != 'dhcp' %}
+            addresses:
+               address:
+            {% for address_item in interface.ip_addresses | default([]) %}
+               {% if address_item.vrf %}
+                  {% if vrf_interfaces[address_item.vrf.name] is not defined %}
+                     {% set _ = vrf_interfaces.update({address_item.vrf.name: []}) %}
+                  {% endif %}
+                     {% set temp_list = vrf_interfaces[address_item.vrf.name] %}
+                     {% set _ = temp_list.append(subinterface) %}
+                     {% set _ = vrf_interfaces.update({address_item.vrf.name: temp_list}) %}
+               {% endif %}
+                  -  ip: {{ address_item.address.split('/')[0] }}
+                     config:
+                        ip: {{ address_item.address.split('/')[0] }}
+                        prefix-length: {{ address_item.address.split('/')[1] }}
+            {% endfor %}{# for address_item in interface.ip_addresses #}
+            config:
+               'dhcp-client': false
+         {% else %}
+            config:
+               'dhcp-client': true
+         {% endif %}                    
+      {% endif %}{# if interface.ip_addresses is defined and interface.ip_addresses #}
+   {% else %}
       subinterfaces:
          subinterface:
          {% for subinterface in subinterface_list %}
@@ -99,6 +134,7 @@ openconfig-interfaces:interfaces:
             {% endif %}                    
             {% endif %}{# if interface.ip_addresses is defined and interface.ip_addresses #}
          {% endfor %}
+   {% endif %}
 {% endfor %}{# for interface in interfaces #}
 {% if vrf_interfaces.items() | length %}
 openconfig-network-instance:network-instances:
