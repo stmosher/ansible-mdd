@@ -79,7 +79,7 @@ openconfig-interfaces:interfaces:
                      {% set _ = vrf_interfaces.update({address_item.vrf.name: []}) %}
                   {% endif %}
                      {% set temp_list = vrf_interfaces[address_item.vrf.name] %}
-                     {% set _ = temp_list.append(subinterface) %}
+                     {% set _ = temp_list.append(interface) %}
                      {% set _ = vrf_interfaces.update({address_item.vrf.name: temp_list}) %}
                {% endif %}
                   -  ip: {{ address_item.address.split('/')[0] }}
@@ -154,7 +154,9 @@ openconfig-network-instance:network-instances:
             config:
                id: {{ interface.name }}
                interface: {{ interface.parent }}
+      {% if interface.type.value != 'virtual' and interface.untagged_vlan is not defined %}
                subinterface: {{ interface.index }}
+      {% endif %}
    {% endfor %}
 {% endfor %}
 {% endif %}
